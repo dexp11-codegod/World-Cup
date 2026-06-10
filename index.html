@@ -159,6 +159,7 @@ h1 .yr{
   background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--muted);white-space:nowrap;
 }
 .chip.pts{color:var(--gold);border-color:rgba(255,199,44,.35)}
+.chip.prov{color:rgba(255,199,44,.75);border-style:dashed;border-color:rgba(255,199,44,.45);background:transparent}
 .tr-team .tp{font-family:var(--display);font-size:17px;width:36px;text-align:right;flex-shrink:0}
 .tr-team.zero{opacity:.65}
 
@@ -265,16 +266,17 @@ footer{margin-top:26px;text-align:center;font-family:var(--cond);font-weight:600
   <div class="legend">
     <h3>How points work</h3>
     <div class="grid">
-      <div class="it"><span>Win your group</span><b>+5</b></div>
-      <div class="it"><span>2nd in group</span><b>+3</b></div>
+      <div class="it"><span>Win your group</span><b>+3</b></div>
+      <div class="it"><span>2nd in group</span><b>+2</b></div>
       <div class="it"><span>3rd in group</span><b>+1</b></div>
       <div class="it"><span>Reach Round of 16</span><b>+5</b></div>
-      <div class="it"><span>Reach quarterfinals</span><b>+8</b></div>
-      <div class="it"><span>Reach semifinals</span><b>+12</b></div>
-      <div class="it"><span>Runner-up</span><b>+15</b></div>
-      <div class="it"><span>Champion</span><b>+20</b></div>
+      <div class="it"><span>Reach quarterfinals</span><b>+7</b></div>
+      <div class="it"><span>Reach semifinals</span><b>+10</b></div>
+      <div class="it"><span>3rd place</span><b>+11</b></div>
+      <div class="it"><span>Runner-up</span><b>+12</b></div>
+      <div class="it"><span>Champion</span><b>+18</b></div>
     </div>
-    <p>Points stack as a team advances. Group placement points lock in once all four teams have played three games. Max haul for one team: 43. Data refreshes automatically every couple of minutes.</p>
+    <p>Points stack as a team advances. While groups are in progress, placement points show live based on current table position &mdash; dashed chips mean projected, and they swing as games happen. They lock in (solid gold) once all four teams in a group have played three games. Max haul for one team: 43. Data refreshes automatically every couple of minutes.</p>
   </div>
 </div>
 
@@ -615,10 +617,14 @@ function groupComplete(g){
 function teamBreakdown(team){
   const g = TEAM_GROUP[team];
   const out = []; let total = 0;
-  if(groupComplete(g)){
-    const pos = DATA.groups[g].findIndex(r=>r.team===team);
-    const pmap=[3,2,1,0], lmap=["Won grp","2nd grp","3rd grp","4th grp"];
-    if(pos>-1 && pmap[pos]>0){ out.push({l:lmap[pos],v:pmap[pos]}); total+=pmap[pos]; }
+  const rows = DATA.groups[g];
+  const done = groupComplete(g);
+  const started = rows && rows.some(r=>r.p>0);
+  if(rows && (done || started)){
+    const pos = rows.findIndex(r=>r.team===team);
+    const pmap=[3,2,1,0];
+    const lmap = done ? ["Won grp","2nd grp","3rd grp","4th grp"] : ["Top of grp","2nd in grp","3rd in grp","4th in grp"];
+    if(pos>-1 && pmap[pos]>0){ out.push({l:lmap[pos],v:pmap[pos],prov:!done}); total+=pmap[pos]; }
   }
   const K=DATA.k;
   if(K.r16.includes(team)){ out.push({l:"R16",v:5}); total+=5; }
@@ -668,8 +674,9 @@ function renderLeaderboard(){
   const el = document.getElementById("leaderboard");
   el.innerHTML = ownerTotals().map((r,i)=>{
     const oc = OWNERS[r.owner].hex;
+    const hasProv = r.teams.some(t=>t.parts.some(p=>p.prov));
     const teams = r.teams.slice().sort((a,b)=>b.total-a.total).map(t=>{
-      const chips = t.parts.map(p=>'<span class="chip pts">'+esc(p.l)+' +'+p.v+'</span>').join("") || '<span class="chip">no pts yet</span>';
+      const chips = t.parts.map(p=>'<span class="chip '+(p.prov?'prov':'pts')+'">'+esc(p.l)+' +'+p.v+'</span>').join("") || '<span class="chip">no pts yet</span>';
       return '<div class="tr-team'+(t.total===0?' zero':'')+'">'+
         '<span class="fl">'+(FLAGS[t.team]||"")+'</span>'+
         '<div><div class="nm">'+esc(t.team)+'</div><div class="grp">Group '+TEAM_GROUP[t.team]+'</div></div>'+
@@ -679,7 +686,7 @@ function renderLeaderboard(){
       '<div class="card-head" onclick="this.parentElement.classList.toggle(\'open\')">'+
         '<div class="rank">'+(i+1)+'</div>'+
         '<div><div class="pname">'+esc(r.owner)+'</div><div class="psub">12 teams</div></div>'+
-        '<div class="ptotal"><div class="n">'+r.total+'</div><div class="l">pts</div></div>'+
+        '<div class="ptotal"><div class="n">'+r.total+'</div><div class="l">'+(hasProv?'live pts':'pts')+'</div></div>'+
         '<svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>'+
       '</div><div class="roster">'+teams+'</div></div>';
   }).join("");
