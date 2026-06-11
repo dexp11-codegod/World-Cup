@@ -401,7 +401,8 @@ const SB_TODAY = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worl
 const STANDINGS = "https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings?season=2026";
 
 async function getJSON(url){
-  const r = await fetch(url);
+  const bust = (url.includes("?")?"&":"?")+"t="+Date.now();
+  const r = await fetch(url+bust);
   if(!r.ok) throw new Error("HTTP "+r.status);
   return r.json();
 }
@@ -510,6 +511,33 @@ async function fetchAssistLeaders(){
   })).filter(x=>x.p && x.g>0);
 }
 
+/* live group tables computed straight from match scores (incl. in-progress) */
+function computeGroups(events){
+  const res = {};
+  for(const [letter, teams] of Object.entries(GROUPS)){
+    const rows = teams.map(t=>({team:t,p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0,done:0}));
+    const idx = {}; rows.forEach(r=>idx[r.team]=r);
+    for(const m of events){
+      if(m.round!=="group") continue;
+      if(TEAM_GROUP[m.h]!==letter && TEAM_GROUP[m.a]!==letter) continue;
+      if(m.state==="pre" || m.hs==null || m.as==null || isNaN(m.hs) || isNaN(m.as)) continue;
+      const fin = m.state==="post";
+      const pairs = [[idx[m.h],m.hs,m.as],[idx[m.a],m.as,m.hs]];
+      for(const [r,gf,ga] of pairs){
+        if(!r) continue;
+        r.p++; if(fin) r.done++;
+        r.gf+=gf; r.ga+=ga;
+        if(gf>ga){r.w++;r.pts+=3} else if(gf===ga){r.d++;r.pts+=1} else {r.l++}
+      }
+    }
+    if(rows.some(r=>r.p>0)){
+      rows.sort((x,y)=>(y.pts-x.pts)||((y.gf-y.ga)-(x.gf-x.ga))||(y.gf-x.gf)||x.team.localeCompare(y.team));
+      res[letter] = rows;
+    }
+  }
+  return res;
+}
+
 /* standings endpoint -> DATA.groups */
 function parseStandings(json){
   const kids = (json && json.children) || [];
@@ -601,6 +629,9 @@ async function loadData(){
       const st = await getJSON(STANDINGS);
       parseStandings(st);
     }catch(e){ /* standings may not publish until first kickoff */ }
+    // live computed tables win over the (FT-only) standings feed
+    const liveTables = computeGroups(events);
+    for(const [letter, rows] of Object.entries(liveTables)) DATA.groups[letter] = rows;
     renderAll();
     setStatus("Live \u00b7 updated "+new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}));
   }catch(e){
@@ -612,7 +643,8 @@ async function loadData(){
 /* ====================== scoring ====================== */
 function groupComplete(g){
   const rows = DATA.groups[g];
-  return rows && rows.length===4 && rows.every(r=>r.p>=3);
+  // lock only on COMPLETED games: live final-round matches keep points provisional
+  return rows && rows.length===4 && rows.every(r=>(r.done!=null ? r.done : r.p)>=3);
 }
 function teamBreakdown(team){
   const g = TEAM_GROUP[team];
@@ -624,7 +656,7 @@ function teamBreakdown(team){
     const pos = rows.findIndex(r=>r.team===team);
     const pmap=[3,2,1,0];
     const lmap = done ? ["Won grp","2nd grp","3rd grp","4th grp"] : ["Top of grp","2nd in grp","3rd in grp","4th in grp"];
-    if(pos>-1 && pmap[pos]>0){ out.push({l:lmap[pos],v:pmap[pos],prov:!done}); total+=pmap[pos]; }
+    if(pos>-1 && pmap[pos]>0 && (done || rows[pos].p>0)){ out.push({l:lmap[pos],v:pmap[pos],prov:!done}); total+=pmap[pos]; }
   }
   const K=DATA.k;
   if(K.r16.includes(team)){ out.push({l:"R16",v:5}); total+=5; }
@@ -792,6 +824,7 @@ if(["groups","bracket","stats"].includes(startTab)) showTab(startTab);
 renderAll();
 loadData();
 setInterval(loadData, 120000);
+setInterval(()=>{ if(DATA.matches.some(m=>m.state==="in")) loadData(); }, 45000);
 setInterval(renderCountdown, 30000);
 document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) loadData(); });
 </script>
