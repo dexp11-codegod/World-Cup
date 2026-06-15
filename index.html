@@ -439,6 +439,7 @@ function parseEvent(ev){
     const detail = st.shortDetail || st.detail || "";
     const started = state!=="pre";
     return {
+      id: ev.id,
       date: ev.date,
       day: dayNum(ev.date),
       round: roundOf(ev.date),
@@ -497,18 +498,49 @@ function buildSheets(events){
   return Object.entries(tally).map(([t,n])=>({team:t, n})).sort((x,y)=>y.n-x.n).slice(0,10);
 }
 
-/* fallback: ESPN leaders endpoint for assists if play-by-play credits none */
-const LEADERS = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/leaders?season=2026";
-async function fetchAssistLeaders(){
-  const json = await getJSON(LEADERS);
-  const cats = (json && (json.leaders || (json.leagues && json.leagues[0] && json.leagues[0].leaders) || json.categories)) || [];
-  const cat = cats.find(c=>/assist/i.test(c.name||c.displayName||c.abbreviation||""));
-  if(!cat || !Array.isArray(cat.leaders)) return [];
-  return cat.leaders.slice(0,8).map(l=>({
-    p: l.athlete && l.athlete.displayName || "",
-    c: norm(l.team && (l.team.displayName||l.team.name)) || "",
-    g: Math.round(+l.value||0)
-  })).filter(x=>x.p && x.g>0);
+/* assists: pulled from per-game SUMMARY feed (scoreboard goal data omits assisters for soccer) */
+const SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary";
+const summaryCache = {}; // event id -> parsed [{p,c}] so finished games are fetched once
+
+function teamMapFromSummary(s){
+  const map = {};
+  const comps = (s.header && s.header.competitions && s.header.competitions[0] && s.header.competitions[0].competitors) || [];
+  comps.forEach(c=>{ if(c.team) map[c.team.id] = norm(c.team.displayName||c.team.name) || c.team.displayName; });
+  return map;
+}
+function extractAssists(s){
+  const out = [];
+  const tmap = teamMapFromSummary(s);
+  const kes = s.keyEvents || [];
+  for(const ke of kes){
+    const tt = ((ke.type && ke.type.text) || "").toLowerCase();
+    if(!tt.includes("goal") || tt.includes("own")) continue;     // goals only, skip own goals
+    if(tt.includes("penalty")) continue;                          // penalties have no assist
+    const parts = ke.participants || [];
+    if(parts.length < 2) continue;                                // [0] scorer, [1] assister
+    const assister = parts[1] && parts[1].athlete && parts[1].athlete.displayName;
+    if(!assister) continue;
+    out.push({p:assister, c:(ke.team && tmap[ke.team.id]) || ""});
+  }
+  return out;
+}
+async function fetchAssists(events){
+  const done = events.filter(m=>m.state==="post" && m.id)
+                     .sort((a,b)=>new Date(b.date)-new Date(a.date))
+                     .slice(0,48);
+  const tally = {};
+  for(const m of done){
+    let list = summaryCache[m.id];
+    if(!list){
+      try{ list = extractAssists(await getJSON(SUMMARY+"?event="+m.id)); summaryCache[m.id] = list; }
+      catch(e){ continue; }
+    }
+    for(const a of list){
+      if(!tally[a.p]) tally[a.p] = {p:a.p, c:a.c, g:0};
+      tally[a.p].g++;
+    }
+  }
+  return Object.values(tally).sort((x,y)=>y.g-x.g).slice(0,8);
 }
 
 /* live group tables computed straight from match scores (incl. in-progress) */
@@ -620,11 +652,8 @@ async function loadData(){
     buildKnockouts(events.filter(m=>m.round!=="group"));
     const sc = buildScorers(rawEvents);
     DATA.gb = sc.goals;
-    DATA.assists = sc.assists;
     DATA.sheets = buildSheets(events);
-    if(!DATA.assists.length){
-      try{ DATA.assists = await fetchAssistLeaders(); }catch(e){ /* leave empty */ }
-    }
+    try{ DATA.assists = await fetchAssists(events); }catch(e){ /* assists are non-critical */ }
     try{
       const st = await getJSON(STANDINGS);
       parseStandings(st);
