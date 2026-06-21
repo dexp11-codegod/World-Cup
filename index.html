@@ -263,6 +263,7 @@ footer{margin-top:26px;text-align:center;font-family:var(--cond);font-weight:600
   <button class="tab active" data-tab="home">Home</button>
   <button class="tab" data-tab="groups">Groups</button>
   <button class="tab" data-tab="bracket">Bracket</button>
+  <button class="tab" data-tab="thirds">3rd Race</button>
   <button class="tab" data-tab="stats">Stats</button>
 </nav>
 
@@ -296,10 +297,6 @@ footer{margin-top:26px;text-align:center;font-family:var(--cond);font-weight:600
 
 <div class="tabpane" id="pane-groups">
   <section class="sect">
-    <div class="sect-label"><span class="dot" style="background:var(--gold)"></span>Third-place race</div>
-    <div id="thirds"></div>
-  </section>
-  <section class="sect">
     <div class="sect-label"><span class="dot" style="background:var(--green)"></span>Group stage</div>
     <div id="groups" class="groups"></div>
   </section>
@@ -309,6 +306,13 @@ footer{margin-top:26px;text-align:center;font-family:var(--cond);font-weight:600
   <section class="sect">
     <div class="sect-label"><span class="dot" style="background:var(--red)"></span>Knockout bracket</div>
     <div id="bracket"></div>
+  </section>
+</div>
+
+<div class="tabpane" id="pane-thirds">
+  <section class="sect">
+    <div class="sect-label"><span class="dot" style="background:var(--gold)"></span>Third-place race</div>
+    <div id="thirds"></div>
   </section>
 </div>
 
@@ -927,7 +931,7 @@ function showTab(name){
 }
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click", ()=>showTab(b.dataset.tab)));
 const startTab = (location.hash||"").replace("#","");
-if(["groups","bracket","stats"].includes(startTab)) showTab(startTab);
+if(["groups","bracket","thirds","stats"].includes(startTab)) showTab(startTab);
 
 /* ====================== boot ====================== */
 renderAll();
