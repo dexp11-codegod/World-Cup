@@ -162,6 +162,20 @@ h1 .yr{
 .chip.prov{color:rgba(255,199,44,.75);border-style:dashed;border-color:rgba(255,199,44,.45);background:transparent}
 .tr-team .tp{font-family:var(--display);font-size:17px;width:36px;text-align:right;flex-shrink:0}
 .tr-team.zero{opacity:.65}
+.tr-team.elim{opacity:.5}
+.tr-team.elim .nm{text-decoration:line-through;text-decoration-color:var(--red);color:var(--muted)}
+.out-tag{font-family:var(--cond);font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--red);border:1px solid rgba(255,59,78,.4);border-radius:5px;padding:0 5px;flex-shrink:0}
+tr.elim td.t{color:var(--muted)}
+tr.elim td.t .tnm{text-decoration:line-through;text-decoration-color:rgba(255,59,78,.7)}
+tr.elim td{opacity:.65}
+
+/* ---------- third-place race ---------- */
+.thirds{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:14px}
+.thirds .ghead .gmeta{color:var(--gold)}
+.thirds td.t .grpcol{color:var(--muted);font-size:12px;letter-spacing:.1em;margin-left:7px}
+tr.qual td:first-child{box-shadow:inset 3px 0 0 var(--green)}
+tr.cutline td{border-bottom:2px solid var(--gold) !important}
+.cut-note{font-family:var(--cond);font-weight:600;font-size:12px;color:var(--gold);letter-spacing:.06em;padding:8px 14px;text-transform:uppercase}
 
 /* ---------- bracket ---------- */
 .bracket{display:flex;gap:14px;overflow-x:auto;padding:2px 2px 12px;-webkit-overflow-scrolling:touch}
@@ -281,6 +295,10 @@ footer{margin-top:26px;text-align:center;font-family:var(--cond);font-weight:600
 </div>
 
 <div class="tabpane" id="pane-groups">
+  <section class="sect">
+    <div class="sect-label"><span class="dot" style="background:var(--gold)"></span>Third-place race</div>
+    <div id="thirds"></div>
+  </section>
   <section class="sect">
     <div class="sect-label"><span class="dot" style="background:var(--green)"></span>Group stage</div>
     <div id="groups" class="groups"></div>
@@ -675,6 +693,42 @@ function groupComplete(g){
   // lock only on COMPLETED games: live final-round matches keep points provisional
   return rows && rows.length===4 && rows.every(r=>(r.done!=null ? r.done : r.p)>=3);
 }
+function allGroupsComplete(){
+  return Object.keys(GROUPS).every(g=>groupComplete(g));
+}
+/* rank every group's current 3rd-place team; top 8 advance to the Round of 32 */
+function thirdPlaceRace(){
+  const arr = [];
+  for(const g of Object.keys(GROUPS)){
+    const rows = DATA.groups[g];
+    if(!rows || rows.length<3 || !rows.some(r=>r.p>0)) continue; // skip groups not yet started
+    const t = rows[2];
+    arr.push({group:g, team:t.team, p:t.p, pts:t.pts, gd:t.gf-t.ga, gf:t.gf});
+  }
+  arr.sort((x,y)=>(y.pts-x.pts)||(y.gd-x.gd)||(y.gf-x.gf)||x.team.localeCompare(y.team));
+  return arr;
+}
+/* teams that are mathematically out — conservative: only certain eliminations */
+function eliminatedSet(){
+  const out = new Set();
+  // 4th in a completed group can never advance
+  for(const g of Object.keys(GROUPS)){
+    if(groupComplete(g)) out.add(DATA.groups[g][3].team);
+  }
+  // once every group is done, the bottom four of the twelve 3rd-place teams are out
+  if(allGroupsComplete()){
+    thirdPlaceRace().slice(8).forEach(r=>out.add(r.team));
+  }
+  // knockout: the loser of any completed knockout match is eliminated
+  ["r32","r16","qf","sf","third","final"].forEach(rk=>{
+    (DATA.rounds[rk]||[]).forEach(m=>{
+      if(m.state!=="post") return;
+      if(m.hWin && FLAGS[m.a]) out.add(m.a);
+      else if(m.aWin && FLAGS[m.h]) out.add(m.h);
+    });
+  });
+  return out;
+}
 function teamBreakdown(team){
   const g = TEAM_GROUP[team];
   const out = []; let total = 0;
@@ -738,9 +792,11 @@ function renderLeaderboard(){
     const hasProv = r.teams.some(t=>t.parts.some(p=>p.prov));
     const teams = r.teams.slice().sort((a,b)=>b.total-a.total).map(t=>{
       const chips = t.parts.map(p=>'<span class="chip '+(p.prov?'prov':'pts')+'">'+esc(p.l)+' +'+p.v+'</span>').join("") || '<span class="chip">no pts yet</span>';
-      return '<div class="tr-team'+(t.total===0?' zero':'')+'">'+
+      const dead = ELIM.has(t.team);
+      return '<div class="tr-team'+(t.total===0?' zero':'')+(dead?' elim':'')+'">'+
         '<span class="fl">'+(FLAGS[t.team]||"")+'</span>'+
         '<div><div class="nm">'+esc(t.team)+'</div><div class="grp">Group '+TEAM_GROUP[t.team]+'</div></div>'+
+        (dead?'<span class="out-tag">Out</span>':'')+
         '<div class="brk">'+chips+'</div><div class="tp">'+t.total+'</div></div>';
     }).join("");
     return '<div class="card" style="--oc:'+oc+'">'+
@@ -798,7 +854,8 @@ function renderGroups(){
     const body = rows.map((r,i)=>{
       const ow = TEAM_OWNER[r.team];
       const qc = i<2 ? "q1" : (i===2 ? "q3" : "");
-      return '<tr class="'+qc+'"><td class="t"><span class="fl">'+(FLAGS[r.team]||"")+'</span>'+esc(r.team)+
+      const dead = ELIM.has(r.team);
+      return '<tr class="'+qc+(dead?' elim':'')+'"><td class="t"><span class="fl">'+(FLAGS[r.team]||"")+'</span><span class="tnm">'+esc(r.team)+'</span>'+
         '<span class="odot" style="background:'+OWNERS[ow].hex+'" title="'+ow+'"></span></td>'+
         '<td>'+r.p+'</td><td>'+r.w+'</td><td>'+r.d+'</td><td>'+r.l+'</td><td>'+(r.gf-r.ga)+'</td><td class="pts">'+r.pts+'</td></tr>';
     }).join("");
@@ -828,6 +885,28 @@ function renderBoot(){
   renderStatList("assists", DATA.assists, "assists", "No assists credited yet \u2014 this list can lag a day behind the goals.");
   renderStatList("sheets", DATA.sheets, "clean", "No clean sheets yet \u2014 every shutout lands here with its owner's tag.", true);
 }
+function renderThirds(){
+  const el = document.getElementById("thirds");
+  const race = thirdPlaceRace();
+  if(!race.length){
+    el.innerHTML = '<div class="empty-note">Once group games are underway, the twelve 3rd-place teams get ranked here \u2014 the top 8 advance to the Round of 32, and every team that sneaks through banks +5 for its owner.</div>';
+    return;
+  }
+  const done = allGroupsComplete();
+  const body = race.map((r,i)=>{
+    const ow = TEAM_OWNER[r.team];
+    const dead = ELIM.has(r.team);
+    const cls = (i<8?"qual":"")+(dead?" elim":"")+((i===7)?" cutline":"");
+    return '<tr class="'+cls.trim()+'"><td class="t"><span class="fl">'+(FLAGS[r.team]||"")+'</span><span class="tnm">'+esc(r.team)+'</span>'+
+      '<span class="grpcol">Grp '+r.group+'</span>'+
+      '<span class="odot" style="background:'+OWNERS[ow].hex+'" title="'+ow+'"></span></td>'+
+      '<td>'+r.p+'</td><td>'+r.gd+'</td><td class="pts">'+r.pts+'</td></tr>';
+  }).join("");
+  el.innerHTML = '<div class="thirds"><div class="ghead"><span class="g">3rd-place teams</span>'+
+    '<span class="gmeta">'+(done?"Final":"Top 8 advance \u00b7 live")+'</span></div>'+
+    '<table><thead><tr><th class="t">Team</th><th>P</th><th>GD</th><th>Pts</th></tr></thead><tbody>'+body+'</tbody></table>'+
+    (race.length>8?'<div class="cut-note">\u2191 Top 8 into the Round of 32 \u00b7 below the line is out</div>':'')+'</div>';
+}
 function renderCountdown(){
   const el = document.getElementById("countdown");
   const kickoff = new Date("2026-06-11T12:00:00-04:00");
@@ -837,7 +916,8 @@ function renderCountdown(){
   el.textContent = "Kickoff in "+(d>0?d+"d ":"")+h+"h "+mn+"m";
   el.style.display="inline-block";
 }
-function renderAll(){ renderTicker(); renderLeaderboard(); renderBracket(); renderGroups(); renderBoot(); renderCountdown(); }
+let ELIM = new Set();
+function renderAll(){ ELIM = eliminatedSet(); renderTicker(); renderLeaderboard(); renderBracket(); renderThirds(); renderGroups(); renderBoot(); renderCountdown(); }
 
 /* ====================== tabs ====================== */
 function showTab(name){
