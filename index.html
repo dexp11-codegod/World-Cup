@@ -178,25 +178,38 @@ tr.cutline td{border-bottom:2px solid var(--gold) !important}
 .cut-note{font-family:var(--cond);font-weight:600;font-size:12px;color:var(--gold);letter-spacing:.06em;padding:8px 14px;text-transform:uppercase}
 
 /* ---------- bracket ---------- */
-.bracket{display:flex;gap:14px;overflow-x:auto;padding:2px 2px 12px;-webkit-overflow-scrolling:touch}
-.bracket::-webkit-scrollbar{height:5px}
-.bracket::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
-.bcol{flex:0 0 auto;width:228px;display:flex;flex-direction:column;gap:10px}
-.bcol h4{
-  font-family:var(--cond);font-weight:700;font-size:13px;letter-spacing:.18em;text-transform:uppercase;
-  color:var(--muted);padding:0 2px 2px;
-}
-.bmatch{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.bmatch.final-card{border-color:rgba(255,199,44,.5);box-shadow:0 0 22px rgba(255,199,44,.08)}
-.bteam{display:flex;align-items:center;gap:8px;padding:8px 10px}
+.bk{display:flex;overflow-x:auto;padding:2px 2px 16px;-webkit-overflow-scrolling:touch}
+.bk::-webkit-scrollbar{height:5px}
+.bk::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+.bk-round{display:flex;flex-direction:column;flex:0 0 178px;padding-right:22px}
+.bk-round[data-r="final"]{flex-basis:172px;padding-right:0}
+.bk-champ{flex:0 0 150px;display:flex;flex-direction:column;justify-content:center;padding-left:18px}
+.bk-rh{height:26px;font-family:var(--cond);font-weight:700;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.bk-body{flex:1;display:flex;flex-direction:column}
+.bk-match{flex:1;display:flex;flex-direction:column;justify-content:center;position:relative;min-height:58px}
+.bk-round[data-r="r16"] .bk-match{min-height:116px}
+.bk-round[data-r="qf"] .bk-match{min-height:232px}
+.bk-round[data-r="sf"] .bk-match{min-height:464px}
+.bk-round[data-r="final"] .bk-match{min-height:928px}
+/* connector lines */
+.bk-round:not([data-r="final"]) .bk-match::after{content:"";position:absolute;left:100%;top:50%;width:22px;height:2px;background:var(--line)}
+.bk-round:not([data-r="final"]) .bk-match:nth-child(odd)::before{content:"";position:absolute;left:calc(100% + 22px);top:50%;width:2px;height:100%;background:var(--line)}
+.bk-card{background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:5px 0}
+.bk-card.final-card{border-color:rgba(255,199,44,.5);box-shadow:0 0 22px rgba(255,199,44,.08)}
+.bteam{display:flex;align-items:center;gap:7px;padding:6px 9px}
 .bteam+.bteam{border-top:1px solid rgba(34,54,63,.5)}
-.bteam .fl{font-size:17px;flex-shrink:0}
-.bteam .nm{font-family:var(--cond);font-weight:600;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.bteam .bsc{margin-left:auto;font-family:var(--display);font-size:14px;flex-shrink:0}
-.bteam .ostripe{width:4px;align-self:stretch;border-radius:2px;flex-shrink:0;margin:-8px 0 -8px -10px;margin-right:4px}
+.bteam .fl{font-size:15px;flex-shrink:0}
+.bteam .nm{font-family:var(--cond);font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.bteam .bsc{margin-left:auto;font-family:var(--display);font-size:13px;flex-shrink:0}
+.bteam .ostripe{width:4px;align-self:stretch;border-radius:2px;flex-shrink:0;margin:-6px 3px -6px -9px}
 .bteam.win .nm{color:var(--gold)}
-.bteam.lose{opacity:.5}
+.bteam.lose{opacity:.45}
 .bteam.tbd{color:var(--muted)}
+.bk-champ-box{background:linear-gradient(135deg,rgba(255,199,44,.16),rgba(255,199,44,.04));border:1px solid rgba(255,199,44,.5);border-radius:11px;padding:16px 10px;text-align:center}
+.bk-champ-box .ttl{font-family:var(--cond);font-weight:700;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-bottom:8px}
+.bk-champ-box .who{font-family:var(--cond);font-weight:700;font-size:18px;display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap}
+.bk-third{margin-top:14px;max-width:340px}
+.bk-third .lbl{font-family:var(--cond);font-weight:700;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
 
 /* ---------- groups ---------- */
 .groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(295px,1fr));gap:12px}
@@ -812,7 +825,7 @@ function renderLeaderboard(){
       '</div><div class="roster">'+teams+'</div></div>';
   }).join("");
 }
-function bracketTeamHTML(name, score, won, finished){
+function bteamHTML(name, score, won, finished){
   if(!name || !FLAGS[name]){
     return '<div class="bteam tbd"><span class="fl">\u26BD</span><span class="nm">'+esc(name||"TBD")+'</span></div>';
   }
@@ -823,32 +836,38 @@ function bracketTeamHTML(name, score, won, finished){
     '<span class="fl">'+FLAGS[name]+'</span><span class="nm">'+esc(name)+'</span>'+ownerTagHTML(name)+
     '<span class="bsc">'+(score==null||isNaN(score)?"":score)+'</span></div>';
 }
+function bcardHTML(m, isFinal){
+  const fin = m && m.state==="post";
+  return '<div class="bk-card'+(isFinal?' final-card':'')+'">'+
+    bteamHTML(m?m.h:null, m?m.hs:null, m&&m.hWin, fin)+
+    bteamHTML(m?m.a:null, m?m.as:null, m&&m.aWin, fin)+'</div>';
+}
+function broundHTML(label, data, count, key){
+  let cells = '';
+  for(let i=0;i<count;i++) cells += '<div class="bk-match">'+bcardHTML(data[i], key==="final")+'</div>';
+  return '<div class="bk-round" data-r="'+key+'"><div class="bk-rh">'+label+'</div><div class="bk-body">'+cells+'</div></div>';
+}
 function renderBracket(){
   const el = document.getElementById("bracket");
   const R = DATA.rounds;
   const any = R.r32.length||R.r16.length||R.qf.length||R.sf.length||R.final.length;
-  if(!any){
-    el.innerHTML = '<div class="empty-note">The bracket locks in after the group stage \u2014 Round of 32 kicks off June 28. Every team gets its owner\u2019s color, so this becomes the flex chart.</div>';
-    return;
-  }
-  const col = (title, ms, isFinal)=>{
-    if(!ms.length) return '<div class="bcol"><h4>'+title+'</h4><div class="empty-note" style="padding:10px;font-size:12px">TBD</div></div>';
-    return '<div class="bcol"><h4>'+title+'</h4>'+ms.map(m=>{
-      const fin = m.state==="post";
-      return '<div class="bmatch'+(isFinal?' final-card':'')+'">'+
-        bracketTeamHTML(m.h,m.hs,m.hWin,fin)+bracketTeamHTML(m.a,m.as,m.aWin,fin)+'</div>';
-    }).join("")+'</div>';
-  };
-  el.innerHTML = '<div class="bracket">'+
-    col("Round of 32",R.r32,false)+
-    col("Round of 16",R.r16,false)+
-    col("Quarterfinals",R.qf,false)+
-    col("Semifinals",R.sf,false)+
-    '<div class="bcol"><h4>Final &middot; July 19</h4>'+
-      (R.final.length?R.final.map(m=>'<div class="bmatch final-card">'+bracketTeamHTML(m.h,m.hs,m.hWin,m.state==="post")+bracketTeamHTML(m.a,m.as,m.aWin,m.state==="post")+'</div>').join(""):'<div class="empty-note" style="padding:10px;font-size:12px">TBD</div>')+
-      '<h4 style="margin-top:8px">3rd place &middot; July 18</h4>'+
-      (R.third.length?R.third.map(m=>'<div class="bmatch">'+bracketTeamHTML(m.h,m.hs,m.hWin,m.state==="post")+bracketTeamHTML(m.a,m.as,m.aWin,m.state==="post")+'</div>').join(""):'<div class="empty-note" style="padding:10px;font-size:12px">TBD</div>')+
-    '</div></div>';
+  const fin = R.final[0];
+  const champ = fin && fin.state==="post" ? (fin.hWin?fin.h:(fin.aWin?fin.a:null)) : null;
+  const banner = any ? '' :
+    '<div class="empty-note" style="margin-bottom:14px">The bracket sets after the group stage \u2014 Round of 32 kicks off June 28. Here\u2019s the shape it\u2019ll take; each slot fills with its owner\u2019s color as teams advance toward the trophy.</div>';
+  const champWho = champ ? (FLAGS[champ]||'')+' '+esc(champ) : '<span style="color:var(--muted)">TBD</span>';
+  const champBox = '<div class="bk-champ"><div class="bk-rh">Champion</div>'+
+    '<div class="bk-champ-box"><div class="ttl">\u{1F3C6} Winner</div><div class="who">'+champWho+'</div></div></div>';
+  const thirdHTML = '<div class="bk-third"><div class="lbl">3rd-place play-off \u00b7 July 18</div>'+bcardHTML(R.third[0], false)+'</div>';
+  el.innerHTML = banner +
+    '<div class="bk">'+
+      broundHTML("Round of 32", R.r32, 16, "r32")+
+      broundHTML("Round of 16", R.r16, 8, "r16")+
+      broundHTML("Quarterfinals", R.qf, 4, "qf")+
+      broundHTML("Semifinals", R.sf, 2, "sf")+
+      broundHTML("Final", R.final, 1, "final")+
+      champBox+
+    '</div>'+thirdHTML;
 }
 function renderGroups(){
   const el = document.getElementById("groups");
