@@ -847,6 +847,49 @@ function broundHTML(label, data, count, key){
   for(let i=0;i<count;i++) cells += '<div class="bk-match">'+bcardHTML(data[i], key==="final")+'</div>';
   return '<div class="bk-round" data-r="'+key+'"><div class="bk-rh">'+label+'</div><div class="bk-body">'+cells+'</div></div>';
 }
+/* official 2026 R32 bracket, in visual top-to-bottom order so adjacent pairs feed the next round.
+   each slot lists its DETERMINATE seeds (group winner "1X" / runner-up "2X"); 3rd-place sides are open.
+   matches 73-88 mapped: 73(2A-2B) 75(1F-2C) 74(1E-3rd) 76(1C-2F) | 77(1I-3rd) 79(1A-3rd) 78(2E-2I) 80(1L-3rd)
+   | 81(1D-3B) 83(1H-2J) 82(1G-3rd) 84(1B-3G) | 85(1K-3rd) 87(1J-2H) 86(2K-2L) 88(2D-2G) */
+const KO_SLOTS = [
+  ["2A","2B"],["1F","2C"],["1E"],["1C","2F"],
+  ["1I"],["1A"],["2E","2I"],["1L"],
+  ["1D"],["1H","2J"],["1G"],["1B"],
+  ["1K"],["1J","2H"],["2K","2L"],["2D","2G"]
+];
+function seedOf(team){
+  const g = TEAM_GROUP[team];
+  if(!g || !groupComplete(g)) return null;
+  const i = DATA.groups[g].findIndex(r=>r.team===team);
+  return (i>=0 && i<3) ? (i+1)+g : null; // 1X/2X/3X
+}
+function r32SlotOfTeam(team){
+  const s = seedOf(team);
+  if(!s) return -1;
+  for(let i=0;i<16;i++) if(KO_SLOTS[i].includes(s)) return i;
+  return -1; // 3rd-place teams aren't anchors; positioned via their opponent
+}
+function placeR32(matches){
+  const out = new Array(16).fill(null), left = [];
+  for(const m of matches){
+    const seeds = [seedOf(m.h), seedOf(m.a)].filter(Boolean);
+    let idx = -1;
+    for(let i=0;i<16;i++){ if(!out[i] && KO_SLOTS[i].some(x=>seeds.includes(x))){ idx=i; break; } }
+    if(idx>=0) out[idx]=m; else left.push(m);
+  }
+  let li=0; for(let i=0;i<16 && li<left.length;i++) if(!out[i]) out[i]=left[li++];
+  return out;
+}
+function placeRound(matches, count, level){
+  const out = new Array(count).fill(null), left = [];
+  for(const m of matches){
+    let slot = r32SlotOfTeam(m.h); if(slot<0) slot = r32SlotOfTeam(m.a);
+    const idx = slot>=0 ? (slot>>level) : -1;
+    if(idx>=0 && idx<count && !out[idx]) out[idx]=m; else left.push(m);
+  }
+  let li=0; for(let i=0;i<count && li<left.length;i++) if(!out[i]) out[i]=left[li++];
+  return out;
+}
 function renderBracket(){
   const el = document.getElementById("bracket");
   const R = DATA.rounds;
@@ -859,12 +902,18 @@ function renderBracket(){
   const champBox = '<div class="bk-champ"><div class="bk-rh">Champion</div>'+
     '<div class="bk-champ-box"><div class="ttl">\u{1F3C6} Winner</div><div class="who">'+champWho+'</div></div></div>';
   const thirdHTML = '<div class="bk-third"><div class="lbl">3rd-place play-off \u00b7 July 18</div>'+bcardHTML(R.third[0], false)+'</div>';
+  // once groups finish, place matches into their official FIFA bracket slots; before that, show the skeleton in order
+  const positioned = allGroupsComplete() && R.r32.length;
+  const r32 = positioned ? placeR32(R.r32) : R.r32;
+  const r16 = positioned ? placeRound(R.r16, 8, 1) : R.r16;
+  const qf  = positioned ? placeRound(R.qf, 4, 2) : R.qf;
+  const sf  = positioned ? placeRound(R.sf, 2, 3) : R.sf;
   el.innerHTML = banner +
     '<div class="bk">'+
-      broundHTML("Round of 32", R.r32, 16, "r32")+
-      broundHTML("Round of 16", R.r16, 8, "r16")+
-      broundHTML("Quarterfinals", R.qf, 4, "qf")+
-      broundHTML("Semifinals", R.sf, 2, "sf")+
+      broundHTML("Round of 32", r32, 16, "r32")+
+      broundHTML("Round of 16", r16, 8, "r16")+
+      broundHTML("Quarterfinals", qf, 4, "qf")+
+      broundHTML("Semifinals", sf, 2, "sf")+
       broundHTML("Final", R.final, 1, "final")+
       champBox+
     '</div>'+thirdHTML;
