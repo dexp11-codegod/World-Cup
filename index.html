@@ -842,6 +842,25 @@ function bcardHTML(m, isFinal){
     bteamHTML(m?m.h:null, m?m.hs:null, m&&m.hWin, fin)+
     bteamHTML(m?m.a:null, m?m.as:null, m&&m.aWin, fin)+'</div>';
 }
+/* one team-slot. if the real team is known, show it; otherwise derive from the feeding match:
+   a decided feeder shows its winner, an undecided feeder shows both flags + "Winner". */
+function slotHTML(m, which, feeder){
+  const name = m ? (which===0?m.h:m.a) : null;
+  const score = m ? (which===0?m.hs:m.as) : null;
+  const won = m ? (which===0?m.hWin:m.aWin) : false;
+  const fin = m && m.state==="post";
+  if(name && FLAGS[name]) return bteamHTML(name, score, won, fin);
+  if(feeder){
+    if(feeder.state==="post"){
+      const w = feeder.hWin?feeder.h:(feeder.aWin?feeder.a:null);
+      if(w && FLAGS[w]) return bteamHTML(w, null, false, false);
+    }
+    if(FLAGS[feeder.h] && FLAGS[feeder.a]){
+      return '<div class="bteam tbd"><span class="fl">'+FLAGS[feeder.h]+FLAGS[feeder.a]+'</span><span class="nm">Winner</span></div>';
+    }
+  }
+  return '<div class="bteam tbd"><span class="fl">\u26BD</span><span class="nm">TBD</span></div>';
+}
 function broundHTML(label, data, count, key){
   let cells = '';
   for(let i=0;i<count;i++) cells += '<div class="bk-match">'+bcardHTML(data[i], key==="final")+'</div>';
@@ -908,15 +927,27 @@ function renderBracket(){
   const r16 = positioned ? placeRound(R.r16, 8, 1) : R.r16;
   const qf  = positioned ? placeRound(R.qf, 4, 2) : R.qf;
   const sf  = positioned ? placeRound(R.sf, 2, 3) : R.sf;
-  el.innerHTML = banner +
-    '<div class="bk">'+
-      broundHTML("Round of 32", r32, 16, "r32")+
-      broundHTML("Round of 16", r16, 8, "r16")+
-      broundHTML("Quarterfinals", qf, 4, "qf")+
-      broundHTML("Semifinals", sf, 2, "sf")+
-      broundHTML("Final", R.final, 1, "final")+
-      champBox+
-    '</div>'+thirdHTML;
+  const roundsDef = [
+    {label:"Round of 32", arr:r32, count:16, key:"r32"},
+    {label:"Round of 16", arr:r16, count:8, key:"r16"},
+    {label:"Quarterfinals", arr:qf, count:4, key:"qf"},
+    {label:"Semifinals", arr:sf, count:2, key:"sf"},
+    {label:"Final", arr:R.final, count:1, key:"final"}
+  ];
+  let bk = '';
+  for(let ri=0; ri<roundsDef.length; ri++){
+    const rd = roundsDef[ri];
+    const prev = ri>0 ? roundsDef[ri-1].arr : null;
+    let cells = '';
+    for(let i=0;i<rd.count;i++){
+      const m = rd.arr[i];
+      cells += '<div class="bk-match"><div class="bk-card'+(rd.key==="final"?" final-card":"")+'">'+
+        slotHTML(m, 0, prev?prev[2*i]:null)+
+        slotHTML(m, 1, prev?prev[2*i+1]:null)+'</div></div>';
+    }
+    bk += '<div class="bk-round" data-r="'+rd.key+'"><div class="bk-rh">'+rd.label+'</div><div class="bk-body">'+cells+'</div></div>';
+  }
+  el.innerHTML = banner + '<div class="bk">'+bk+champBox+'</div>'+thirdHTML;
 }
 function renderGroups(){
   const el = document.getElementById("groups");
